@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.venv/
+
+# Real credentials generated at runtime — never commit this
+.streamlit/secrets.toml
+
+# Vendored binaries are large and machine-specific — carry these into the
+# airgap as a separate file transfer, not through git. See airgap/README_AIRGAP.md.
+airgap/vendor/
+airgap/pgdata/
+airgap/postgres.log
