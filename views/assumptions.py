@@ -88,7 +88,13 @@ def render() -> None:
         return
 
     body = ""
+    prev_product_id = None
+    shade = False
     for a, p in filtered[:400]:
+        if p["id"] != prev_product_id:
+            shade = not shade
+            prev_product_id = p["id"]
+        row_style = ' style="background:var(--hairline-strong)"' if shade else ""
         if a["unit"] == "%":
             val = pct(a["value"], 2 if a["value"] < 0.01 else 1)
         elif a["value"] >= 10000:
@@ -97,7 +103,7 @@ def render() -> None:
             val = num(a["value"], 3 if a["value"] % 1 else 0)
         conf_colour = (t["good"] if a["confidence"] >= 80
                        else t["s1"] if a["confidence"] >= 60 else t["warn"])
-        body += (f'<tr><td class="strong">{esc(a["assumption"])}</td>'
+        body += (f'<tr{row_style}><td class="strong">{esc(a["assumption"])}</td>'
                  f'<td>{esc(p["name"])}</td>'
                  f'<td class="num strong">{esc(val)}</td>'
                  f'<td>{esc(a["unit"])}</td>'
