@@ -190,7 +190,7 @@ def _simple(settings) -> None:
 
     with panel:
         _live_panel(live, c, th, "Set a user population or add a value lever and the valuation "
-                                 "builds here in real time.")
+                                 "builds here in real time.", key="live_wf_simple")
 
 
 # ── Detailed mode (the five-step wizard) ─────────────────────────────────────
@@ -284,7 +284,7 @@ def _wizard(settings, existing) -> None:
 
     with panel:
         _live_panel(live, c, th, "Select how this product creates value in step 3 and the "
-                                 "valuation will build here in real time.")
+                                 "valuation will build here in real time.", key="live_wf_wizard")
 
 
 def _step1(draft) -> None:
@@ -512,7 +512,7 @@ def _toggle_driver(draft, d) -> None:
 
 # ── Shared live panel ────────────────────────────────────────────────────────
 
-def _live_panel(live, c, th, empty_text: str) -> None:
+def _live_panel(live, c, th, empty_text: str, key: str = "live_wf") -> None:
     write('<h3 class="dpv-eyebrow" style="font-size:13px;letter-spacing:.07em">Live valuation</h3>')
     if live["annualGrossValue"] <= 0:
         write(f'<div class="dpv-card" style="text-align:center;padding:36px 20px">'
@@ -541,7 +541,7 @@ def _live_panel(live, c, th, empty_text: str) -> None:
           f'<div style="display:grid;grid-template-columns:1fr 1fr;column-gap:18px;margin-top:12px">'
           f"{cells}</div></div>")
     from .common import chart
-    chart(value_waterfall(live, c, th, height=210, show_investment=False), key="live_wf")
+    chart(value_waterfall(live, c, th, height=210, show_investment=False), key=key)
     if live["guardrails"]:
         write(f'<p style="margin:4px 0 0;font-size:11px;line-height:1.7;color:var(--warn)">'
               f'{len(live["guardrails"])} assumption'
