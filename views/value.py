@@ -72,9 +72,9 @@ def _simple(settings) -> None:
     with form:
         write(_section(1, "What are you building?"))
         a, b = st.columns(2)
-        inp["name"] = a.text_input("Product name", inp["name"],
+        inp["name"] = a.text_input("Product name *", inp["name"],
                                    placeholder="e.g. Merchant Insights API", key="s_name")
-        inp["owner"] = b.text_input("Product owner", inp["owner"],
+        inp["owner"] = b.text_input("Product owner *", inp["owner"],
                                     placeholder="Who is accountable?", key="s_owner")
         new_type = a.selectbox("Product type", PRODUCT_TYPES, PRODUCT_TYPES.index(inp["type"]),
                                key="s_type", help="Seeds delivery, run-cost and adoption benchmarks.")
@@ -169,7 +169,8 @@ def _simple(settings) -> None:
         live = value_product(draft, settings)
 
         write(rule())
-        ready = len(inp["name"].strip()) > 1 and live["annualGrossValue"] > 0
+        ready = (len(inp["name"].strip()) > 1 and len(inp["owner"].strip()) > 1
+                and live["annualGrossValue"] > 0)
         left, right = st.columns([3, 1.4])
         left.markdown(
             '<div style="padding-top:8px;font-size:11.5px;color:var(--text-muted)">'
@@ -177,6 +178,7 @@ def _simple(settings) -> None:
             if ready else
             '<div style="padding-top:8px;font-size:11.5px;color:var(--text-muted)">'
             + ("Give the product a name" if len(inp["name"].strip()) < 2
+               else "Give the product an owner" if len(inp["owner"].strip()) < 2
                else "Add users or a value lever") + "</div>",
             unsafe_allow_html=True)
         if right.button("✦  Generate valuation", type="primary", disabled=not ready,
