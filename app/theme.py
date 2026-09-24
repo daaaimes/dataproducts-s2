@@ -186,12 +186,19 @@ input::placeholder, textarea::placeholder {{
    unlabelled-wrapper pattern as the select's role="group" box. */
 [data-testid="stChatInput"] > div {{
   background: var(--surface-1) !important;
+  border: 1px solid var(--hairline-strong) !important;
 }}
 /* The sticky footer bar the chat input sits inside (a direct child of
    stBottom, itself unlabelled) has its own separate hardcoded white
    background surrounding the input box fixed above. */
 [data-testid="stBottom"] > div {{
   background: var(--surface-1) !important;
+}}
+/* Chat message text (Value Advisor's responses) -- same locked-light text
+   color as everything else, invisible against the dark background since
+   the message bubble itself has no background of its own. */
+[data-testid="stChatMessage"] * {{
+  color: var(--text-primary) !important;
 }}
 /* Tooltip ("?") icons on widget labels: Streamlit sets `stroke` directly
    (not just relying on currentColor inheritance) to a hardcoded value from

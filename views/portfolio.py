@@ -147,7 +147,12 @@ def render() -> None:
 
     edited = st.data_editor(
         df, hide_index=True, use_container_width=True, height=560,
-        key="pf_table", disabled=[c_ for c_ in df.columns if c_ != "Compare"],
+        # Keyed on theme so toggling dark/light forces Streamlit to recreate
+        # this widget rather than reuse the mounted instance -- the grid
+        # only picks up the current theme's colors when it first mounts, so
+        # without this the table stays stuck in whatever theme was active
+        # when it was first rendered this session.
+        key=f"pf_table_{store.theme()}", disabled=[c_ for c_ in df.columns if c_ != "Compare"],
         column_order=["Compare", "Product", "Code", "Owner", "Business Unit", "Type", "Lifecycle",
                       "Annual Value", "3-Year Value", "Investment", "ROI", "Payback",
                       "Priority", "Status"],
