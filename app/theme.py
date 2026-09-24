@@ -167,6 +167,32 @@ hr {{ border-color: var(--hairline); }}
 input::placeholder, textarea::placeholder {{
   color: var(--text-muted) !important; opacity: 1 !important;
 }}
+/* The select/multiselect dropdown *popup* is rendered in a portal attached
+   near <body>, entirely outside [data-testid="stSelectbox"] -- none of the
+   rules above, which are all scoped inside that container, could ever
+   reach it. Its option rows have no stable per-row selector, but the
+   popup only ever contains option text, so a blanket color override on
+   every descendant is safe here. */
+[data-testid="stSelectboxVirtualDropdown"],
+[data-testid="stMultiSelectVirtualDropdown"] {{
+  background: var(--surface-1) !important;
+}}
+[data-testid="stSelectboxVirtualDropdown"] *,
+[data-testid="stMultiSelectVirtualDropdown"] * {{
+  color: var(--text-primary) !important;
+}}
+/* Chat input (Value Advisor): the visible box is an inner wrapper div,
+   not the stChatInput container itself or the textarea -- same
+   unlabelled-wrapper pattern as the select's role="group" box. */
+[data-testid="stChatInput"] > div {{
+  background: var(--surface-1) !important;
+}}
+/* The sticky footer bar the chat input sits inside (a direct child of
+   stBottom, itself unlabelled) has its own separate hardcoded white
+   background surrounding the input box fixed above. */
+[data-testid="stBottom"] > div {{
+  background: var(--surface-1) !important;
+}}
 /* Tooltip ("?") icons on widget labels: Streamlit sets `stroke` directly
    (not just relying on currentColor inheritance) to a hardcoded value from
    its own native locked-light theme, which wins over the icon's `color`
