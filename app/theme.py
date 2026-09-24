@@ -145,21 +145,27 @@ hr {{ border-color: var(--hairline); }}
 input::placeholder, textarea::placeholder {{
   color: var(--text-muted) !important; opacity: 1 !important;
 }}
-/* Tooltip ("?") icons on widget labels use stroke="currentColor", so their
-   visible color depends on whatever ancestor happens to set `color` --
-   correct next to a checkbox (which already has a color rule elsewhere),
-   but falling through to Streamlit's native locked-light default next to a
-   selectbox/textarea/number-input label. Set it explicitly so it never
-   depends on which widget it's attached to. */
+/* Tooltip ("?") icons on widget labels: Streamlit sets `stroke` directly
+   (not just relying on currentColor inheritance) to a hardcoded value from
+   its own native locked-light theme, which wins over the icon's `color`
+   entirely. Setting `color` alone (as a first attempt did) doesn't fix
+   this -- `stroke` has to be set explicitly too. */
 [data-testid="stTooltipIcon"], [data-testid="stTooltipIcon"] svg,
-button[aria-label^="Help for"] {{
+button[aria-label^="Help for"], button[aria-label^="Help for"] svg {{
   color: var(--text-muted) !important;
+  stroke: var(--text-muted) !important;
 }}
 /* Radio option labels (e.g. the dashboard's category filter) render through
    the same react-aria internals and were inheriting Streamlit's native
    locked-light text color instead of our theme. */
 [data-testid="stRadioOption"] p, [data-testid="stCheckbox"] p {{
   color: var(--text-primary) !important;
+}}
+/* Inactive tabs (e.g. "Detailed" next to the selected "Simple" tab) fall
+   back to the same native locked-light color -- data-baseweb="tab" no
+   longer matches this Streamlit version's markup, but role="tab" does. */
+.stTabs [role="tab"][aria-selected="false"] {{
+  color: var(--text-muted) !important;
 }}
 [data-baseweb="tag"] {{ background: var(--s1) !important; }}
 .stSlider [data-baseweb="slider"] div[role="slider"] {{ background: var(--surface-1); }}
