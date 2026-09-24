@@ -129,6 +129,22 @@ hr {{ border-color: var(--hairline); }}
 [data-baseweb="popover"] li, [data-baseweb="menu"] {{
   background: var(--surface-1) !important; color: var(--text-primary) !important;
 }}
+/* Newer Streamlit builds render selects and text fields through
+   react-aria-components internals rather than BaseWeb, so the rule above
+   never matches them — they were falling back to Streamlit's own native
+   theme, which config.toml locks to light regardless of our own toggle. */
+[data-testid="stSelectbox"] [class*="react-aria-"],
+[data-testid="stMultiSelect"] [class*="react-aria-"],
+[data-testid="stTextInput"] [class*="react-aria-"],
+[data-testid="stNumberInput"] [class*="react-aria-"],
+[data-testid="stTextArea"] [class*="react-aria-"] {{
+  background: var(--surface-1) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--hairline-strong) !important;
+}}
+input::placeholder, textarea::placeholder {{
+  color: var(--text-muted) !important; opacity: 1 !important;
+}}
 [data-baseweb="tag"] {{ background: var(--s1) !important; }}
 .stSlider [data-baseweb="slider"] div[role="slider"] {{ background: var(--surface-1); }}
 .stSlider [data-testid="stTickBar"], .stSlider [data-testid="stTickBarMin"],
