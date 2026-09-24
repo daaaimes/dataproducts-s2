@@ -142,6 +142,28 @@ hr {{ border-color: var(--hairline); }}
   color: var(--text-primary) !important;
   border-color: var(--hairline-strong) !important;
 }}
+/* The rule above only reaches elements with a react-aria-* class. The
+   actual visible box for a select/multiselect is one layer deeper: an
+   unlabelled wrapper div (role="group") around the real <input>, carrying
+   its own hardcoded white background that isn't react-aria-* classed at
+   all, so it slipped past the rule above entirely. */
+[data-testid="stSelectbox"] [role="group"],
+[data-testid="stMultiSelect"] [role="group"] {{
+  background: var(--surface-1) !important;
+}}
+[data-testid="stSelectbox"] [role="group"] input,
+[data-testid="stMultiSelect"] [role="group"] input {{
+  color: var(--text-primary) !important;
+}}
+/* The dropdown chevron: fill="currentColor" in the markup, but (same
+   pattern as the tooltip icons' stroke) Streamlit sets `fill` directly to
+   a hardcoded locked-light value that wins over inherited color. Scoped to
+   svg[fill="currentColor"] specifically -- the tooltip icon is a separate,
+   deliberately outline-only icon (fill="none") that this must not touch. */
+[data-testid="stSelectbox"] svg[fill="currentColor"],
+[data-testid="stMultiSelect"] svg[fill="currentColor"] {{
+  fill: var(--text-muted) !important;
+}}
 input::placeholder, textarea::placeholder {{
   color: var(--text-muted) !important; opacity: 1 !important;
 }}
