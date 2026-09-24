@@ -223,7 +223,12 @@ def _wizard(settings, existing) -> None:
 
     with body:
         step = st.session_state.wizard_step
-        advanced = st.toggle("Advanced assumptions", key="wz_adv")
+        advanced = st.toggle(
+            "Advanced assumptions", key="wz_adv",
+            help="Reveals extra fields for fine-tuning — growth rate, baseline cost, evidence "
+                 "reference and start delay per benefit (step 3), plus discount rate and "
+                 "projection period (step 4). Off by default since most business cases don't "
+                 "need them.")
         _, title, _ = STEPS[step - 1]
         blurbs = {
             1: "Describe the product and the business problem it solves. This framing is what senior management reads first.",
