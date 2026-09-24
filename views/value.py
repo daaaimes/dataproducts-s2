@@ -259,8 +259,12 @@ def _wizard(settings, existing) -> None:
         live = value_product(draft, settings)
 
         write(rule())
-        can_advance = (len(draft["name"].strip()) > 1 and len(draft["owner"].strip()) > 1
-                       if step == 1 else bool(draft["benefits"]) if step == 3 else True)
+        can_advance = (
+            (len(draft["name"].strip()) > 1 and len(draft["owner"].strip()) > 1
+             and len(draft["problemStatement"].strip()) > 1) if step == 1
+            else len(draft["targetUsers"].strip()) > 1 if step == 2
+            else bool(draft["benefits"]) if step == 3
+            else True)
         nav_a, nav_b, nav_c = st.columns([1, 2.4, 1.4])
         if nav_a.button("←  Back", disabled=step == 1, key="wz_back", use_container_width=True):
             st.session_state.wizard_step = max(1, step - 1)
@@ -268,7 +272,8 @@ def _wizard(settings, existing) -> None:
         if not can_advance:
             nav_b.markdown('<div style="padding-top:9px;text-align:right;font-size:11.5px;'
                            'color:var(--text-muted)">'
-                           + ("Product name and owner are required" if step == 1
+                           + ("Product name, owner and business problem are required" if step == 1
+                              else "Target users is required" if step == 2
                               else "Select at least one value driver") + "</div>",
                            unsafe_allow_html=True)
         if step < 5:
@@ -314,7 +319,7 @@ def _step1(draft) -> None:
         "Geographic scope", GEOGRAPHIC_SCOPES,
         GEOGRAPHIC_SCOPES.index(draft["geographicScope"]), key="wz_geo")
     draft["problemStatement"] = st.text_area(
-        "Business problem", draft["problemStatement"], key="wz_problem", height=90,
+        "Business problem *", draft["problemStatement"], key="wz_problem", height=90,
         help="What is broken today, and what does it cost the organisation? Be specific and quantified where you can.",
         placeholder="Relationship managers spend 30–40% of their week assembling client material by hand across five systems…")
     draft["description"] = st.text_area(
@@ -324,7 +329,7 @@ def _step1(draft) -> None:
 
 def _step2(draft) -> None:
     draft["targetUsers"] = st.text_input(
-        "Target users", draft["targetUsers"], key="wz_tu",
+        "Target users *", draft["targetUsers"], key="wz_tu",
         help="Which roles will use this, and in what part of their work?",
         placeholder="Relationship managers, team leaders, investment counsellors")
     a, b = st.columns(2)
