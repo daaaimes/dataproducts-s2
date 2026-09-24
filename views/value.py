@@ -379,9 +379,9 @@ def _step3(draft, live, c, advanced) -> None:
         with st.container():
             head, val = st.columns([3, 1])
             with head:
-                b["label"] = st.text_input("Benefit label", b["label"], key=f"wz_bl_{b['id']}",
-                                           label_visibility="collapsed")
-                write(f'<p style="margin:-6px 0 6px;font-size:11.5px;line-height:1.6;'
+                write(f'<p style="margin:0;font-size:14.5px;font-weight:600;'
+                      f'color:var(--text-primary)">{esc(b["label"])}</p>')
+                write(f'<p style="margin:2px 0 6px;font-size:11.5px;line-height:1.6;'
                       f'color:var(--text-muted)">{swatch(tokens(store.theme())[CATEGORY_META[model["category"]]["series"]])} '
                       f'{esc(model["summary"])}</p>')
             with val:
