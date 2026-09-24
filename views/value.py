@@ -437,9 +437,6 @@ def _step3(draft, live, c, advanced) -> None:
                 b["evidenceNote"] = x2.text_input(
                     "Evidence reference", b.get("evidenceNote") or "", key=f"wz_en_{b['id']}",
                     placeholder="Time-and-motion study across 48 RMs, Q1 2026")
-            if st.button("Remove this benefit line", key=f"wz_rmv_{b['id']}"):
-                draft["benefits"] = [x for x in draft["benefits"] if x["id"] != b["id"]]
-                st.rerun()
             write(rule())
 
 
