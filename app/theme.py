@@ -145,6 +145,22 @@ hr {{ border-color: var(--hairline); }}
 input::placeholder, textarea::placeholder {{
   color: var(--text-muted) !important; opacity: 1 !important;
 }}
+/* Tooltip ("?") icons on widget labels use stroke="currentColor", so their
+   visible color depends on whatever ancestor happens to set `color` --
+   correct next to a checkbox (which already has a color rule elsewhere),
+   but falling through to Streamlit's native locked-light default next to a
+   selectbox/textarea/number-input label. Set it explicitly so it never
+   depends on which widget it's attached to. */
+[data-testid="stTooltipIcon"], [data-testid="stTooltipIcon"] svg,
+button[aria-label^="Help for"] {{
+  color: var(--text-muted) !important;
+}}
+/* Radio option labels (e.g. the dashboard's category filter) render through
+   the same react-aria internals and were inheriting Streamlit's native
+   locked-light text color instead of our theme. */
+[data-testid="stRadioOption"] p, [data-testid="stCheckbox"] p {{
+  color: var(--text-primary) !important;
+}}
 [data-baseweb="tag"] {{ background: var(--s1) !important; }}
 .stSlider [data-baseweb="slider"] div[role="slider"] {{ background: var(--surface-1); }}
 .stSlider [data-testid="stTickBar"], .stSlider [data-testid="stTickBarMin"],
