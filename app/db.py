@@ -111,6 +111,20 @@ create table if not exists benefits (
     inputs jsonb not null
 );
 
+create table if not exists users (
+    lan_id text primary key,
+    department text not null,
+    sub_department text not null,
+    manager text,
+    access text not null check (access in ('publish', 'archive', 'portfolio'))
+);
+
+alter table products add column if not exists department text not null default '';
+alter table products add column if not exists sub_department text not null default '';
+alter table products add column if not exists owner_lan_id text not null default '';
+alter table products add column if not exists record_status text not null default 'published';
+alter table products add column if not exists duplicated_from_id text;
+
 create table if not exists realisation (
     product_id text not null references products(id) on delete cascade,
     period text not null,
@@ -136,6 +150,7 @@ _PRODUCT_SCALAR_COLUMNS = (
     "business_unit", "domain", "type", "lifecycle", "strategic_priority", "target_users",
     "user_count", "usage_frequency", "geographic_scope", "tags", "created_at", "updated_at",
     "adoption_assumption", "complexity", "time_to_value_months", "discount_rate", "horizon_years",
+    "department", "sub_department", "owner_lan_id", "record_status", "duplicated_from_id",
 )
 # (column, product dict key)
 _PRODUCT_SCALAR_KEYS = (
@@ -149,6 +164,9 @@ _PRODUCT_SCALAR_KEYS = (
     ("adoption_assumption", "adoptionAssumption"), ("complexity", "complexity"),
     ("time_to_value_months", "timeToValueMonths"), ("discount_rate", "discountRate"),
     ("horizon_years", "horizonYears"),
+    ("department", "department"), ("sub_department", "subDepartment"),
+    ("owner_lan_id", "ownerLanId"), ("record_status", "recordStatus"),
+    ("duplicated_from_id", "duplicatedFromId"),
 )
 _PRODUCT_JSON_KEYS = ("investment", "confidence", "strategic", "scenarios")
 # stored in child tables, not as columns on products — excluded from the extra catch-all too
@@ -191,8 +209,16 @@ def _product_row_to_dict(row: tuple) -> dict:
     return out
 
 
+_SCALAR_DEFAULTS = {"department": "", "subDepartment": "", "ownerLanId": "",
+                    "recordStatus": "published"}
+
+
 def _product_to_row(p: dict) -> tuple:
-    scalars = tuple(p.get(key) for _, key in _PRODUCT_SCALAR_KEYS)
+    # Products built before these columns existed (the seeded catalogue,
+    # older rows) won't carry them — fall back rather than insert NULL
+    # against a NOT NULL column.
+    scalars = tuple(p[key] if p.get(key) is not None else _SCALAR_DEFAULTS.get(key)
+                    for _, key in _PRODUCT_SCALAR_KEYS)
     jsons = tuple(Jsonb(p.get(key)) for key in _PRODUCT_JSON_KEYS)
     extra = {k: v for k, v in p.items() if k not in _PRODUCT_KNOWN_KEYS}
     return scalars + jsons + (Jsonb(extra),)
@@ -362,3 +388,42 @@ def upsert_product(product: dict) -> None:
 def delete_product(product_id: str) -> None:
     with _connect() as conn:
         conn.execute("delete from products where id = %s", (product_id,))
+
+
+USER_COLUMNS = ("lan_id", "department", "sub_department", "manager", "access")
+
+
+def _user_row_to_dict(row: tuple) -> dict:
+    lan_id, department, sub_department, manager, access = row
+    return {"lanId": lan_id, "department": department, "subDepartment": sub_department,
+            "manager": manager, "access": access}
+
+
+def fetch_users() -> list[dict]:
+    with _connect() as conn:
+        rows = conn.execute(
+            f"select {', '.join(USER_COLUMNS)} from users order by lan_id").fetchall()
+    return [_user_row_to_dict(r) for r in rows]
+
+
+def get_user(lan_id: str) -> dict | None:
+    with _connect() as conn:
+        row = conn.execute(f"select {', '.join(USER_COLUMNS)} from users where lan_id = %s",
+                           (lan_id,)).fetchone()
+    return _user_row_to_dict(row) if row else None
+
+
+def upsert_user(user: dict) -> None:
+    row = (user["lanId"], user["department"], user["subDepartment"],
+           user.get("manager") or None, user["access"])
+    assignments = ", ".join(f"{col} = excluded.{col}" for col in USER_COLUMNS if col != "lan_id")
+    with _connect() as conn:
+        conn.execute(
+            f"insert into users ({', '.join(USER_COLUMNS)}) "
+            f"values ({', '.join(['%s'] * len(USER_COLUMNS))}) "
+            f"on conflict (lan_id) do update set {assignments}", row)
+
+
+def delete_user(lan_id: str) -> None:
+    with _connect() as conn:
+        conn.execute("delete from users where lan_id = %s", (lan_id,))

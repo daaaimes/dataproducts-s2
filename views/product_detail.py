@@ -5,7 +5,7 @@ import math
 
 import streamlit as st
 
-from app import store
+from app import auth, store
 from app.charts import cashflow_chart, scenario_chart, tornado_chart, value_waterfall
 from app.data.catalogs import CATEGORY_META, DRIVER_BY_ID
 from app.domain import LIFECYCLE_ORDER
@@ -18,7 +18,7 @@ from app.format import (money, money_full, months, num, pct, ratio_pct, relative
 from app.theme import tokens
 from app.ui import (badge, band_tone, card, esc, evidence_tone, gauge, h3, key_value,
                     lifecycle_tone, meter, rule, stars, swatch, table, write)
-from .common import chart, goto, selected_product_id
+from .common import chart, goto
 
 
 @st.dialog("How was this calculated?", width="large")
@@ -86,22 +86,28 @@ def explain_dialog(result, settings):
           f"outcome is credited to factors outside this data product.</p>")
 
 
+def _reset_what_if_levers() -> None:
+    for lm in LEVER_META:
+        st.session_state[f"wi_{lm['key']}"] = 1.0
+
+
 def render() -> None:
-    rows = store.rows()
     settings = store.settings()
     c = settings["currency"]
     th = store.theme()
     t = tokens(th)
 
-    if not rows:
-        st.info("No products in this workspace yet.")
-        return
-
-    pid = selected_product_id(rows)
-    row = next((r for r in rows if r["product"]["id"] == pid), None)
+    # An explicit selection (opening your own Draft or Archived entry) is
+    # resolved directly by id, since store.rows() only carries Published
+    # work — falling back to it would silently swap in a different product.
+    selected = st.session_state.get("selected_product")
+    row = store.row_by_id(selected) if selected else None
     if row is None:
-        st.warning("Product not found. It may have been deleted.")
-        return
+        rows = store.rows()
+        if not rows:
+            st.info("No products in this workspace yet.")
+            return
+        row = rows[0]
 
     p, v, priority = row["product"], row["valuation"], row["priority"]
 
@@ -117,7 +123,9 @@ def render() -> None:
               f"</div>"
               f'<p class="dpv-sub">{esc(p["type"])} · {esc(p["businessUnit"])} · Owner '
               f'{esc(p["owner"])} · Sponsor {esc(p["sponsor"])} · Updated '
-              f'{relative_date(p["updatedAt"])}</p>')
+              f'{relative_date(p["updatedAt"])}'
+              + (f' · {esc(p["department"])} / {esc(p["subDepartment"])}'
+                 if p.get("department") else "") + "</p>")
     with actions:
         b1, b2, b3 = st.columns(3)
         if b1.button("Business case", use_container_width=True):
@@ -126,6 +134,30 @@ def render() -> None:
             goto("boardroom", boardroom_product=p["id"])
         if b3.button("Advisor", use_container_width=True):
             goto("advisor", selected_product=p["id"])
+
+    status = p.get("recordStatus", "published")
+    is_owner = p.get("ownerLanId") == auth.current_lan_id()
+    archive_eligible = auth.can_archive_entry(p.get("ownerLanId", ""))
+    if is_owner or archive_eligible:
+        st.write("")
+        s1, s2, s3, _s4 = st.columns([1.3, 1, 1, 3.7])
+        with s1:
+            write(badge(status.capitalize(),
+                       {"draft": "warn", "published": "good", "archived": "neutral"}.get(status)))
+        if is_owner and status == "draft":
+            if s2.button("Publish", type="primary", use_container_width=True, key="pd_publish"):
+                if store.publish_product(p["id"]):
+                    st.rerun()
+        if archive_eligible and status == "published":
+            if s2.button("Archive", use_container_width=True, key="pd_archive"):
+                if store.archive_product(p["id"]):
+                    st.rerun()
+        if is_owner:
+            if s3.button("Duplicate", use_container_width=True, key="pd_duplicate"):
+                new_id = store.duplicate_product(p["id"])
+                if new_id:
+                    st.session_state.edit_product = new_id
+                    goto("value")
 
     scenarios = run_scenarios(p, settings)
     sensitivity = tornado(p, settings)
@@ -336,10 +368,13 @@ def render() -> None:
             ("NPV", money(wv["npv"], c)),
         ]))
         if any(x != 1.0 for x in levers.values()):
-            if st.button("Reset to base case", use_container_width=True):
-                for lm in LEVER_META:
-                    st.session_state[f"wi_{lm['key']}"] = 1.0
-                st.rerun()
+            # Resetting via on_click, not a plain if-button: the sliders above
+            # are already instantiated by the time a button click is handled
+            # in the same run, so assigning st.session_state[key] there raises
+            # StreamlitWidgetAlreadyInstantiatedError. on_click runs before
+            # the rerun starts, while no widget has been created yet.
+            st.button("Reset to base case", use_container_width=True,
+                     on_click=_reset_what_if_levers)
 
     # ── Sensitivity + cashflow ──────────────────────────────────────────────
     st.write("")
@@ -489,13 +524,16 @@ def render() -> None:
           "investment approval.</p>")
 
     st.write("")
-    with st.expander("Delete this valuation"):
-        st.write(f"This removes **{p['name']}**, its assumptions and its realisation history from "
-                 "this workspace. You can restore the full banking catalogue at any time from Settings.")
-        if st.button("Delete product", type="primary", key="pd_delete"):
-            store.delete_product(p["id"])
-            st.session_state.pop("selected_product", None)
-            goto("portfolio")
+    owner_lan_id = p.get("ownerLanId", "")
+    if (not owner_lan_id) or is_owner or auth.is_admin():
+        with st.expander("Delete this valuation"):
+            st.write(f"This removes **{p['name']}**, its assumptions and its realisation history "
+                     "from this workspace. You can restore the full banking catalogue at any time "
+                     "from Settings.")
+            if st.button("Delete product", type="primary", key="pd_delete"):
+                store.delete_product(p["id"])
+                st.session_state.pop("selected_product", None)
+                goto("portfolio")
 
 
 def kpi_cell(meta, value, gross, currency, t) -> str:

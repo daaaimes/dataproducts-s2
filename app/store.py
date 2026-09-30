@@ -15,8 +15,9 @@ import math
 
 import streamlit as st
 
-from . import db, persist
+from . import auth, db, persist
 from .data.catalog import build_catalog_products
+from .data.factory import now_iso, uid
 from .domain import DEFAULT_SETTINGS
 from .engine.valuation import compute_priority, value_product
 
@@ -90,8 +91,8 @@ def reset_demo() -> None:
     st.session_state.dirty += 1
 
 
-def rows():
-    """Every product valued and scored.
+def _all_rows():
+    """Every product valued and scored, regardless of status or ownership.
 
     Memoised on a revision counter rather than st.cache_data: the products are
     large nested dicts, so hashing them on every rerun costs more than the
@@ -112,8 +113,87 @@ def rows():
     return out
 
 
+def rows():
+    """Published products visible to the current user.
+
+    Portfolio-tier users see every owner's published work; everyone else sees
+    only their own (plus legacy/demo data that predates ownership). This is
+    what feeds the Dashboard, Portfolio and every other aggregate view.
+    """
+    return [r for r in _all_rows()
+            if r["product"].get("recordStatus", "published") == "published"
+            and auth.can_view(r["product"])]
+
+
 def row_by_id(pid: str):
-    return next((r for r in rows() if r["product"]["id"] == pid), None)
+    r = next((r for r in _all_rows() if r["product"]["id"] == pid), None)
+    if r is None or not auth.can_view(r["product"]):
+        return None
+    return r
+
+
+def my_entries():
+    """Every one of the current user's own submissions, any status."""
+    lan_id = auth.current_lan_id()
+    if not lan_id:
+        return []
+    return sorted(
+        (r for r in _all_rows() if r["product"].get("ownerLanId") == lan_id),
+        key=lambda r: r["product"]["updatedAt"], reverse=True)
+
+
+def archive_queue():
+    """Published entries submitted by people who report to the current user."""
+    if not auth.has_level(auth.current_user(), "archive"):
+        return []
+    return [r for r in _all_rows()
+            if r["product"].get("recordStatus") == "published"
+            and auth.can_archive_entry(r["product"].get("ownerLanId", ""))]
+
+
+def publish_product(pid: str) -> bool:
+    r = row_by_id(pid)
+    if not r or not auth.can_submit():
+        return False
+    p = r["product"]
+    if p.get("ownerLanId") != auth.current_lan_id() or p.get("recordStatus") != "draft":
+        return False
+    save_product({**p, "recordStatus": "published"})
+    return True
+
+
+def archive_product(pid: str) -> bool:
+    r = row_by_id(pid)
+    if not r:
+        return False
+    p = r["product"]
+    if p.get("recordStatus") != "published" or not auth.can_archive_entry(p.get("ownerLanId", "")):
+        return False
+    save_product({**p, "recordStatus": "archived"})
+    return True
+
+
+def duplicate_product(pid: str) -> str | None:
+    r = row_by_id(pid)
+    if not r or not auth.can_submit():
+        return None
+    p = r["product"]
+    if p.get("ownerLanId") != auth.current_lan_id():
+        return None
+    new_product = copy.deepcopy(p)
+    new_id = uid("dp")
+    new_product["id"] = new_id
+    new_product["recordStatus"] = "draft"
+    new_product["duplicatedFromId"] = pid
+    new_product["createdAt"] = now_iso()
+    new_product["updatedAt"] = now_iso()
+    for a in new_product.get("assumptions", []):
+        a["id"] = uid("asm")
+        a["productId"] = new_id
+    for b in new_product.get("benefits", []):
+        b["id"] = uid("ben")
+    save_product(new_product)
+    return new_id
 
 
 def totals():

@@ -10,7 +10,7 @@ import copy
 
 import streamlit as st
 
-from app import store
+from app import auth, store
 from app.charts import value_waterfall
 from app.data.catalogs import BUSINESS_UNITS, CATEGORY_META, DOMAINS, DRIVER_GROUPS, DRIVERS
 from app.data.factory import empty_product, make_benefit, uid
@@ -39,6 +39,13 @@ def render() -> None:
     settings = store.settings()
     editing_id = st.session_state.get("edit_product")
     editing = editing_id and store.row_by_id(editing_id)
+    if editing and editing["product"].get("recordStatus") != "draft":
+        st.session_state.pop("edit_product", None)
+        editing = None
+
+    if not auth.can_submit():
+        st.info("You don't have submission access yet, so you can explore this form but "
+                 "can't save a valuation — ask an admin to add your LAN ID.")
 
     page_header(
         f"Edit valuation — {editing['product']['name']}" if editing else "Value a Data Product",
@@ -181,9 +188,10 @@ def _simple(settings) -> None:
                else "Give the product an owner" if len(inp["owner"].strip()) < 2
                else "Add users or a value lever") + "</div>",
             unsafe_allow_html=True)
-        if right.button("✦  Generate valuation", type="primary", disabled=not ready,
+        if right.button("✦  Generate valuation", type="primary",
+                        disabled=not ready or not auth.can_submit(),
                         use_container_width=True, key="s_go"):
-            product = build_product_from_simple(inp, settings)
+            product = _stamp_new(build_product_from_simple(inp, settings))
             store.save_product(product)
             st.session_state.simple_input = default_simple_input()
             goto("product", selected_product=product["id"])
@@ -283,10 +291,11 @@ def _wizard(settings, existing) -> None:
                 st.rerun()
         else:
             if nav_c.button("✦  Generate valuation", type="primary", key="wz_finish",
-                            use_container_width=True):
+                            disabled=not auth.can_submit(), use_container_width=True):
                 product = dict(draft)
                 product["code"] = product["code"] or "DP-000"
                 product["id"] = product["id"] or uid("dp")
+                product = _stamp_new(product)
                 store.save_product(product)
                 st.session_state.pop("_wizard_key", None)
                 st.session_state.pop("edit_product", None)
@@ -567,6 +576,18 @@ def _section(n: int, title: str, hint: str = "") -> str:
             f'background:color-mix(in srgb, var(--s1) 14%, transparent);color:var(--s1)">{n}</span>'
             f'<h3 style="margin:0;font-size:15px;font-weight:600;letter-spacing:-0.01em;'
             f'color:var(--text-primary)">{esc(title)}</h3></div>{hint_html}</div>')
+
+
+def _stamp_new(product: dict) -> dict:
+    """Attach the submitter's department/sub-department and starts every save
+    from this form as a Draft — publishing is a separate, later action."""
+    user = auth.current_user()
+    if user:
+        product["department"] = user["department"]
+        product["subDepartment"] = user["subDepartment"]
+        product["ownerLanId"] = user["lanId"]
+    product["recordStatus"] = "draft"
+    return product
 
 
 def _row(label: str, value: str, strong: bool = False) -> str:

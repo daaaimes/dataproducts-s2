@@ -17,9 +17,9 @@ st.set_page_config(
                          "value of data and AI investments."},
 )
 
-from app import store, theme  # noqa: E402  (must follow set_page_config)
+from app import auth, store, theme  # noqa: E402  (must follow set_page_config)
 from app.format import money  # noqa: E402
-from app.ui import brand, write  # noqa: E402
+from app.ui import brand, esc, write  # noqa: E402
 
 store.init()
 theme.inject(store.theme())
@@ -27,6 +27,7 @@ theme.inject(store.theme())
 NAV = [
     ("dashboard", "Dashboard", "⌂", "views/pages/dashboard_page.py"),
     ("value", "Value a Product", "✦", "views/pages/value_page.py"),
+    ("my_entries", "My Entries", "☷", "views/pages/my_entries_page.py"),
     ("portfolio", "Portfolio", "▤", "views/pages/portfolio_page.py"),
     ("product", "Valuation", "◎", "views/pages/product_page.py"),
     ("compare", "Compare", "⇄", "views/pages/compare_page.py"),
@@ -35,6 +36,7 @@ NAV = [
     ("reports", "Reports", "▦", "views/pages/reports_page.py"),
     ("assumptions", "Assumptions", "☰", "views/pages/assumptions_page.py"),
     ("boardroom", "Boardroom Mode", "▶", "views/pages/boardroom_page.py"),
+    ("admin_users", "Create User", "⚑", "views/pages/admin_users_page.py"),
     ("settings", "Settings", "⚙", "views/pages/settings_page_view.py"),
 ]
 
@@ -58,9 +60,11 @@ with st.sidebar:
     for key, title, icon, _path in NAV:
         if key == "product":
             continue  # reached from the portfolio, not the nav
+        if key == "admin_users" and not auth.is_admin():
+            continue
         if key == "boardroom":
             st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-        st.page_link(pages[key], label=f"{icon}\u2003{title}")
+        st.page_link(pages[key], label=f"{icon} {title}")
 
     totals = store.totals()
     write(f'<div class="dpv-side-foot">'
@@ -77,6 +81,22 @@ with st.sidebar:
                  use_container_width=True, key="side_theme"):
         store.set_settings({"theme": "light" if dark else "dark"})
         st.rerun()
+
+    st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+    lan_id = auth.current_lan_id()
+    signed_in_user = auth.current_user()
+    tier = signed_in_user["access"].capitalize() if signed_in_user else "Unlisted"
+    if lan_id:
+        write(f'<div style="font-size:11px;color:var(--text-muted)">Signed in as '
+              f'<strong style="color:var(--text-primary)">{esc(lan_id)}</strong> · {esc(tier)}</div>')
+    if not auth.is_header_detected():
+        with st.expander("Dev: set LAN ID" if not lan_id else f"Dev override: {lan_id}"):
+            st.caption("No identity header detected from CML yet — set one manually to test "
+                       "as a listed user.")
+            override = st.text_input("LAN ID", value=lan_id, key="lan_override_input")
+            if st.button("Set", key="lan_override_btn", use_container_width=True):
+                auth.set_lan_id_override(override)
+                st.rerun()
 
 nav.run()
 
