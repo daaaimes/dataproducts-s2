@@ -64,7 +64,7 @@ with st.sidebar:
             continue
         if key == "boardroom":
             st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-        st.page_link(pages[key], label=f"{icon} {title}")
+        st.page_link(pages[key], label=f"{icon}\u2003{title}")
 
     totals = store.totals()
     write(f'<div class="dpv-side-foot">'
