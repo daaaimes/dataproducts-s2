@@ -18,7 +18,7 @@ from app.domain import (COST_FIELD_LABELS, EVIDENCE_TYPES, GEOGRAPHIC_SCOPES,
                         INVESTMENT_GROUPS, LIFECYCLE_STAGES, PRODUCT_TYPES,
                         STRATEGIC_PRIORITIES, USAGE_FREQUENCIES)
 from app.engine.models import MODELS
-from app.engine.simple import (ARCHETYPES, EVIDENCE_LEVELS, LEVERS, apply_archetype,
+from app.engine.simple import (ARCHETYPES, EVIDENCE_LEVELS, EVIDENCE_PROFILE, LEVERS, apply_archetype,
                                build_product_from_simple, default_simple_input)
 from app.engine.valuation import value_product
 from app.format import money, months, num, pct, ratio_pct
@@ -33,6 +33,87 @@ STEPS = [
     (4, "What will it cost?", "Cost"),
     (5, "How confident are you?", "Confidence"),
 ]
+
+
+# Tooltip text for benefit inputs whose model definition carries no help of its own.
+FIELD_HELP = {
+    "Affected employees": "How many people's work the product changes.",
+    "Annual growth": "Year-on-year growth applied to this benefit line.",
+    "Annual incremental revenue": "Extra revenue per year the product is expected to bring in, "
+                                  "before probability and attribution.",
+    "Average annual revenue / customer": "What one customer is worth in revenue each year.",
+    "Baseline annual cost": "What the cost being reduced is today, per year.",
+    "Current annual probability": "How likely the risk event is to happen in a year, today.",
+    "Current churn rate": "Share of customers who leave each year, today.",
+    "Customers at risk": "Customers who could leave and whom the product can help keep.",
+    "Expected avoided cost (annual)": "The yearly cost you expect not to spend because of the product.",
+    "Expected churn rate": "Share of customers who leave each year once the product is working.",
+    "Expected reduction": "Share of the baseline cost the product is expected to remove.",
+    "Financial impact of the risk event": "What one occurrence of the risk event would cost.",
+    "Fully-loaded annual cost / employee": "Yearly cost of one employee, including salary and overheads.",
+    "Fully-loaded hourly cost": "Cost of one working hour, including salary and overheads "
+                                "(yearly cost ÷ annual working hours).",
+    "Hours saved / person / month": "Hours each person gets back every month.",
+    "Hours saved / user / month": "Hours each user gets back every month.",
+    "Incremental balance / customer": "Extra balance (assets, deposits or loans) each converted "
+                                      "customer brings.",
+    "Number of employees": "How many employees the time saving applies to.",
+    "Number of users": "How many people use the product.",
+    "Probability after the product": "How likely the risk event is each year once the product "
+                                     "is working.",
+    "Probability of achievement": "Likelihood that the stated revenue is actually achieved.",
+    "Probability the cost is avoided": "Likelihood that the planned cost really is avoided.",
+    "Realisation": "Share of the theoretical saving that actually lands in the cost base "
+                   "or usable capacity.",
+    "Revenue per productive hour": "Revenue earned per hour of selling or revenue-generating work.",
+    "Target customers": "Customers the product is aimed at.",
+}
+
+
+COST_FIELD_HELP = {
+    "internalDevelopment": "Your own staff's time spent building the product.",
+    "externalDevelopment": "Contractors or outsourced developers building the product.",
+    "consulting": "External advisory fees.",
+    "dataEngineering": "Work to source, clean and pipe the data.",
+    "mlDevelopment": "Building and training AI / machine-learning models.",
+    "uxProductManagement": "Design and product-management effort.",
+    "cloud": "Cloud hosting and services.",
+    "onPremInfrastructure": "Servers and hardware you run yourself.",
+    "gpu": "Specialist processors used for AI workloads.",
+    "llmApi": "Fees paid to use a large language model through an API.",
+    "softwareLicences": "Paid software licences.",
+    "dataVendors": "Fees paid for third-party data.",
+    "storage": "Data storage costs.",
+    "compute": "Processing power costs.",
+    "support": "Helpdesk and user support.",
+    "operations": "Day-to-day running of the product.",
+    "modelMonitoring": "Checking that AI models keep performing correctly.",
+    "dataQuality": "Ongoing checks and fixes to keep the data accurate.",
+    "cybersecurity": "Security controls and monitoring.",
+    "maintenance": "Fixes and upgrades to keep the product working.",
+    "productTeam": "The team that looks after the product long-term.",
+    "training": "Teaching people to use the product.",
+    "changeManagement": "Helping the organisation adopt new ways of working.",
+    "communications": "Announcements and engagement about the product.",
+    "businessAdoption": "Work to drive real take-up in the business.",
+}
+
+
+CONFIDENCE_HELP = {
+    "baselineQuality": "How reliable the 'before' numbers are.",
+    "dataAvailability": "How much real measured data exists to support the case.",
+    "assumptionStrength": "How well the business assumptions would stand up to challenge.",
+    "historicalEvidence": "Whether similar efforts in the past delivered similar results.",
+    "attributionConfidence": "How sure you are the benefit is down to this product.",
+    "adoptionConfidence": "How sure you are people will actually use it.",
+    "financialValidation": "Whether Finance has reviewed and agreed the numbers.",
+    "measurementMaturity": "How well you can measure the outcome once it is live.",
+}
+
+
+def _field_help(f: dict) -> str | None:
+    """The model's own help text, else the shared definition for that input."""
+    return f["help"] or FIELD_HELP.get(f["label"])
 
 
 def render() -> None:
@@ -145,6 +226,7 @@ def _simple(settings) -> None:
             "Evidence level", levels, levels.index(inp["evidenceLevel"]), key="s_ev",
             horizontal=True, label_visibility="collapsed",
             format_func=lambda k: next(e["label"] for e in EVIDENCE_LEVELS if e["key"] == k))
+        st.markdown(_evidence_help_css(), unsafe_allow_html=True)
         write(f'<p style="margin:2px 0 0;font-size:11.5px;color:var(--text-muted)">'
               f'{esc(next(e["blurb"] for e in EVIDENCE_LEVELS if e["key"] == inp["evidenceLevel"]))}</p>')
 
@@ -343,35 +425,55 @@ def _step2(draft) -> None:
         placeholder="Relationship managers, team leaders, investment counsellors")
     a, b = st.columns(2)
     draft["userCount"] = a.number_input("Number of users", 0, 1_000_000,
-                                        int(draft["userCount"]), 10, key="wz_uc")
+                                        int(draft["userCount"]), 10, key="wz_uc",
+                                        help="How many people the product is intended for.")
     draft["usageFrequency"] = b.selectbox("Usage frequency", USAGE_FREQUENCIES,
                                           USAGE_FREQUENCIES.index(draft["usageFrequency"]),
-                                          key="wz_freq")
+                                          key="wz_freq",
+                                          help="How often users will use it: "
+                                               + ", ".join(USAGE_FREQUENCIES) + ".")
     write(rule())
     draft["adoptionAssumption"] = st.slider("Expected steady-state adoption", 0.05, 1.0,
                                             float(draft["adoptionAssumption"]), 0.01,
-                                            key="wz_adopt", format="%.2f")
+                                            key="wz_adopt", format="%.2f",
+                                            help="Share of target users actively using the product "
+                                                 "once it has settled. Enterprise data products "
+                                                 "typically settle at 45–75% in year one; above 85% "
+                                                 "needs pilot data.")
     extra = ('<span style="color:var(--warn)"> Above 85% is unusually high — validate with pilot '
              "data.</span>" if draft["adoptionAssumption"] > 0.85 else "")
     write(f'<p style="margin:2px 0 0;font-size:11.5px;line-height:1.7;color:var(--text-muted)">'
           f"Enterprise data products typically stabilise at 45–75% active adoption in year one.{extra}</p>")
     c1, c2 = st.columns(2)
     draft["complexity"] = c1.slider("Delivery complexity", 1, 10, int(draft["complexity"]), 1,
-                                    key="wz_cx")
+                                    key="wz_cx",
+                                    help="How hard the product is to deliver, 1 (simple) to 10 "
+                                         "(very hard). Plotted on the Dashboard matrix.")
     draft["timeToValueMonths"] = c2.slider("Time to first measurable value (months)", 1, 36,
-                                           int(draft["timeToValueMonths"]), 1, key="wz_ttv")
+                                           int(draft["timeToValueMonths"]), 1, key="wz_ttv",
+                                           help="Months until the first value can be measured. "
+                                                "Faster is better in the priority score.")
 
     write(rule() + '<p style="margin:0 0 10px;font-size:12px;line-height:1.7;color:var(--text-muted)">'
           "<strong style='color:var(--text-secondary)'>Strategic contribution.</strong> Scored "
           "separately from economic value. These never enter the financial case — they inform "
           "prioritisation.</p>")
-    fields = [("strategicAlignment", "Strategic alignment"), ("customerImpact", "Customer impact"),
-              ("reusability", "Reusability"), ("riskReduction", "Risk reduction"),
-              ("dataDemocratisation", "Data democratisation"), ("aiReadiness", "AI readiness")]
+    fields = [("strategicAlignment", "Strategic alignment",
+               "Fit with the data and AI strategy."),
+              ("customerImpact", "Customer impact",
+               "Effect on customer experience and outcomes."),
+              ("reusability", "Reusability",
+               "How much of the product other teams can reuse."),
+              ("riskReduction", "Risk reduction",
+               "How much the product lowers risk."),
+              ("dataDemocratisation", "Data democratisation",
+               "How far it puts data in the hands of more people."),
+              ("aiReadiness", "AI readiness",
+               "How much it prepares the organisation for AI.")]
     cols = st.columns(2)
-    for i, (k, label) in enumerate(fields):
+    for i, (k, label, hint) in enumerate(fields):
         draft["strategic"][k] = cols[i % 2].slider(label, 0, 100, int(draft["strategic"][k]), 5,
-                                                   key=f"wz_st_{k}")
+                                                   key=f"wz_st_{k}", help=f"{hint} Scored 0–100.")
 
 
 def _step3(draft, live, c, advanced) -> None:
@@ -415,7 +517,7 @@ def _step3(draft, live, c, advanced) -> None:
                 if f["unit"] == "toggle":
                     b["inputs"][f["key"]] = 1 if st.toggle(
                         f["label"], value=b["inputs"].get(f["key"], 0) >= 0.5,
-                        key=f"wz_in_{b['id']}_{f['key']}", help=f["help"]) else 0
+                        key=f"wz_in_{b['id']}_{f['key']}", help=_field_help(f)) else 0
                     continue
                 if f["key"] in ("annualGrowth", "baselineCost") and not advanced:
                     continue
@@ -428,7 +530,7 @@ def _step3(draft, live, c, advanced) -> None:
                     b["inputs"][f["key"]] = col.slider(
                         f["label"], lo, hi, min(max(cur, lo), hi),
                         float(f["step"] or 0.01), key=f"wz_in_{b['id']}_{f['key']}",
-                        help=f["help"] if advanced else None, format="%.3f")
+                        help=_field_help(f), format="%.3f")
                 else:
                     prefix = f"{c} " if f["unit"] == "currency" else ""
                     b["inputs"][f["key"]] = col.number_input(
@@ -436,33 +538,49 @@ def _step3(draft, live, c, advanced) -> None:
                         float(f["min"]) if f["min"] is not None else None,
                         float(f["max"]) if f["max"] is not None else None,
                         cur, float(f["step"] or 1), key=f"wz_in_{b['id']}_{f['key']}",
-                        help=f["help"] if advanced else None)
+                        help=_field_help(f))
 
             m1, m2, m3, m4 = st.columns(4)
             b["attribution"] = m1.slider("Attribution", 0.0, 1.0, float(b["attribution"]), 0.05,
-                                         key=f"wz_at_{b['id']}", format="%.2f")
+                                         key=f"wz_at_{b['id']}", format="%.2f",
+                                         help="Share of the outcome credited to this data product, "
+                                              "since pricing, campaigns and frontline work also "
+                                              "contribute. 30–70% is typical; above 80% needs a "
+                                              "controlled test.")
             b["evidence"] = m2.selectbox("Evidence", EVIDENCE_TYPES,
                                          EVIDENCE_TYPES.index(b["evidence"]),
-                                         key=f"wz_ev_{b['id']}")
+                                         key=f"wz_ev_{b['id']}",
+                                         help="What kind of support the numbers have: Actual "
+                                              "(measured), Pilot, Benchmark, Estimate or "
+                                              "Management Assumption.")
             b["evidenceStrength"] = m3.slider("Evidence strength", 1, 5,
                                               int(b["evidenceStrength"]), 1,
-                                              key=f"wz_es_{b['id']}")
+                                              key=f"wz_es_{b['id']}",
+                                              help="How strong the evidence is, 1 (weak) to 5 "
+                                                   "(strong). Moves the confidence score up or down.")
             b["rampMonths"] = m4.slider("Ramp to full value (months)", 1, 30,
-                                        int(b["rampMonths"]), 1, key=f"wz_rm_{b['id']}")
+                                        int(b["rampMonths"]), 1, key=f"wz_rm_{b['id']}",
+                                        help="Months from the benefit starting until it reaches "
+                                             "its full yearly level. Benefits build up gradually "
+                                             "rather than switching on.")
             if advanced:
                 x1, x2 = st.columns([1, 3])
                 b["startMonth"] = x1.slider("Starts after go-live (months)", 0, 24,
-                                            int(b["startMonth"]), 1, key=f"wz_sm_{b['id']}")
+                                            int(b["startMonth"]), 1, key=f"wz_sm_{b['id']}",
+                                            help="Delay between go-live and the benefit beginning.")
                 b["evidenceNote"] = x2.text_input(
                     "Evidence reference", b.get("evidenceNote") or "", key=f"wz_en_{b['id']}",
-                    placeholder="Time-and-motion study across 48 RMs, Q1 2026")
+                    placeholder="Time-and-motion study across 48 RMs, Q1 2026",
+                    help="Where the evidence comes from, for example a time-and-motion study.")
             write(rule())
 
 
 def _step4(draft, c, settings, advanced) -> None:
     draft["investment"]["buildMonths"] = st.slider(
         "Build duration before go-live (months)", 1, 30,
-        int(draft["investment"]["buildMonths"]), 1, key="wz_bmn")
+        int(draft["investment"]["buildMonths"]), 1, key="wz_bmn",
+        help="Months to deliver the product before it goes live. Run cost and benefits "
+             "start after this.")
     for group in INVESTMENT_GROUPS:
         total = sum(draft["investment"][group["key"]].get(f, 0) for f in group["fields"])
         with st.expander(f"{group['label']} · {group['note']} · {money(total, c)}",
@@ -472,7 +590,8 @@ def _step4(draft, c, settings, advanced) -> None:
                 draft["investment"][group["key"]][f] = cols[i % 3].number_input(
                     COST_FIELD_LABELS[f], 0.0, None,
                     float(draft["investment"][group["key"]].get(f, 0)), 10_000.0,
-                    key=f"wz_cost_{group['key']}_{f}")
+                    key=f"wz_cost_{group['key']}_{f}",
+                    help=f"{COST_FIELD_HELP[f]} {group['note']}.")
     if advanced:
         write(rule())
         a, b = st.columns(2)
@@ -485,7 +604,8 @@ def _step4(draft, c, settings, advanced) -> None:
             "Projection period (years)", [3, 5, 7, 10],
             [3, 5, 7, 10].index(int(draft.get("horizonYears") or settings["horizonYears"]))
             if int(draft.get("horizonYears") or settings["horizonYears"]) in (3, 5, 7, 10) else 1,
-            key="wz_hy")
+            key="wz_hy",
+            help="How many years the valuation looks ahead.")
 
 
 def _step5(draft, live) -> None:
@@ -494,7 +614,9 @@ def _step5(draft, live) -> None:
         with cols[i % 2]:
             draft["confidence"][dim["key"]] = st.slider(
                 dim["label"], 0, 100, int(draft["confidence"][dim["key"]]), 5,
-                key=f"wz_cf_{dim['key']}")
+                key=f"wz_cf_{dim['key']}",
+                help=f"{CONFIDENCE_HELP[dim['key']]} Scored 0–100; "
+                     f"weighs {round(dim['weight'] * 100)}% of the confidence score.")
             write(f'<p style="margin:-6px 0 8px;font-size:11px;color:var(--text-muted)">'
                   f'Weight {round(dim["weight"] * 100)}%</p>')
     if live["guardrails"]:
@@ -576,6 +698,43 @@ def _section(n: int, title: str, hint: str = "") -> str:
             f'background:color-mix(in srgb, var(--s1) 14%, transparent);color:var(--s1)">{n}</span>'
             f'<h3 style="margin:0;font-size:15px;font-weight:600;letter-spacing:-0.01em;'
             f'color:var(--text-primary)">{esc(title)}</h3></div>{hint_html}</div>')
+
+
+def _evidence_help_css() -> str:
+    """An (i) beside each evidence level, with a hover explanation. st.radio has
+    no per-option help, so the icon and tooltip are drawn with CSS on the
+    radio's own labels. Wording comes from EVIDENCE_LEVELS / EVIDENCE_PROFILE."""
+    def css_str(s: str) -> str:
+        return s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\A ")
+
+    rules = []
+    for i, e in enumerate(EVIDENCE_LEVELS, 1):
+        prof = EVIDENCE_PROFILE[e["key"]]
+        tip = (f'{e["blurb"]}\nStarts attribution at {round(prof["attribution"] * 100)}% '
+               f'and realisation at {round(prof["realisation"] * 100)}%.')
+        rules.append(f'.st-key-s_ev [role="radiogroup"] > label:nth-of-type({i})::before '
+                     f'{{ content: "{css_str(tip)}"; }}')
+    return """<style>
+.st-key-s_ev [role="radiogroup"] > label {
+  position: relative; display: inline-flex !important; align-items: center;
+}
+.st-key-s_ev [role="radiogroup"] > label::after {
+  content: "?"; display: inline-flex; align-items: center; justify-content: center;
+  width: 14px; height: 14px; margin-left: 7px; border-radius: 999px;
+  border: 1.5px solid var(--text-muted); color: var(--text-muted);
+  font-size: 10px; font-weight: 700; line-height: 1;
+}
+.st-key-s_ev [role="radiogroup"] > label::before {
+  position: absolute; bottom: calc(100% + 6px); left: 0; width: 250px; z-index: 1000;
+  padding: 8px 12px; border-radius: 8px; white-space: pre-line;
+  background: var(--surface-1); color: var(--text-primary);
+  border: 1px solid var(--hairline-strong);
+  font-size: 13px; line-height: 1.5; font-weight: 400;
+  box-shadow: 0 4px 14px rgba(0,0,0,.12); pointer-events: none;
+  opacity: 0; visibility: hidden; transition: opacity .12s;
+}
+.st-key-s_ev [role="radiogroup"] > label:hover::before { opacity: 1; visibility: visible; }
+""" + "\n".join(rules) + "\n</style>"
 
 
 def _stamp_new(product: dict) -> dict:
