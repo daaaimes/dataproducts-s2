@@ -51,7 +51,7 @@ INVESTMENT_GROUPS = [
     {"key": "build", "label": "Build cost", "note": "One-off delivery cost",
      "fields": ["internalDevelopment", "externalDevelopment", "consulting",
                 "dataEngineering", "mlDevelopment", "uxProductManagement"]},
-    {"key": "technology", "label": "Technology cost", "note": "Annual run-rate",
+    {"key": "technology", "label": "Technology cost", "note": "BAU",
      "fields": ["cloud", "onPremInfrastructure", "gpu", "llmApi",
                 "softwareLicences", "dataVendors", "storage", "compute"]},
     {"key": "run", "label": "Run cost", "note": "Annual run-rate",
