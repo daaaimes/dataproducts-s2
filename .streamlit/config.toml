@@ -1,4 +1,23 @@
+[global]
+# Libraries are loaded from airgap/vendor rather than site-packages; without
+# this Streamlit mistakes that for a development checkout.
+developmentMode = false
+
+[server]
+headless = true
+# Production app: no hot-reload. Without this Streamlit tries to watch every file
+# in airgap/vendor (thousands) and exhausts the container's inotify limit.
+fileWatcherType = "none"
+# CML serves the app through its own authenticating proxy; Streamlit's CORS and
+# XSRF checks reject requests that arrive that way.
+enableCORS = false
+enableXsrfProtection = false
+
 [theme]
 # Streamlit's own accent colour: slider track/thumb/value, +/- steppers, radios,
 # checkboxes and toggles. The default is orange-red.
 primaryColor = "#005cb9"
+
+[browser]
+# Airgapped: don't try to send usage statistics anywhere.
+gatherUsageStats = false

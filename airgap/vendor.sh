@@ -1,51 +1,61 @@
 #!/usr/bin/env bash
-# Run this ONCE on any machine with internet access — NOT inside the
-# airgapped CML session, which by definition can't reach any of this.
+# Run this ONCE on any machine with internet access — NOT inside CML.
+# Needs: bash, python3 + pip, unzip. (It installs the 'uv' tool with pip if missing.) Works on Linux or macOS (it always fetches
+# Linux x86_64 builds, whatever machine it runs on).
 #
-# It downloads everything the app needs to run with zero network access:
-#   1. Python wheels for every dependency in requirements.txt
-#   2. A self-contained PostgreSQL server build (no install, no root needed)
+# It builds everything the app needs so that CML never runs pip:
+#   airgap/vendor/py<VER>/   every Python library, already unpacked. The app
+#                            loads it through PYTHONPATH; nothing is installed.
+#   airgap/vendor/postgres/  a self-contained PostgreSQL 16 server (no root).
 #
-# Output goes into airgap/vendor/ (gitignored — this is NOT meant to go
-# through git; carry this folder into the airgap via whatever bulk file
-# transfer process your environment approves — USB, an internal file drop,
-# etc. It's ~300-500MB, too large and too binary for a git repo).
-#
-# BEFORE RUNNING — fill in these two values. Both need to match your
-# actual CML session, not this machine:
+# Usage:  bash airgap/vendor.sh 3.10          (your CML runtime's Python)
+#         bash airgap/vendor.sh 3.10 3.11     (several, if unsure)
 set -euo pipefail
 
-# 1. Python version your CML session runs. Check with: python3 --version
-#    inside an actual CML session/terminal — this MUST match, a wheel built
-#    for the wrong Python version will fail to install.
-PYTHON_VERSION="3.10"
-
-# 2. PostgreSQL version to fetch from EnterpriseDB's generic Linux binaries.
-#    This URL pattern occasionally changes version numbers as new releases
-#    ship — if it 404s, check https://www.enterprisedb.com/download-postgresql-binaries
-#    for the current filename and update PG_VERSION below.
-PG_VERSION="16.4-1"
+VERSIONS=("$@")
+if [ ${#VERSIONS[@]} -eq 0 ]; then
+  echo "Usage: bash airgap/vendor.sh <python-version> [...]   e.g. 3.10"
+  echo "Find it in a CML session terminal with: python3 --version"
+  exit 1
+fi
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VENDOR="$ROOT/airgap/vendor"
-mkdir -p "$VENDOR/wheels" "$VENDOR/postgres"
+mkdir -p "$VENDOR"
+# uv resolves dependencies for the *target* Python (pip would use this
+# machine's Python and silently miss version-specific dependencies).
+command -v uv >/dev/null 2>&1 || python3 -m pip install --quiet --user uv
+UV="$(command -v uv || echo "$(python3 -m site --user-base)/bin/uv")"
 
-echo "== Downloading Python wheels for linux x86_64 / Python $PYTHON_VERSION =="
-pip download \
-  --platform manylinux2014_x86_64 \
-  --python-version "$PYTHON_VERSION" \
-  --implementation cp \
-  --abi "cp${PYTHON_VERSION//./}" \
-  --only-binary=:all: \
-  -d "$VENDOR/wheels" \
-  -r "$ROOT/requirements.txt"
+for V in "${VERSIONS[@]}"; do
+  TAG="${V//./}"
+  DEST="$VENDOR/py$TAG"
+  echo "== Unpacking Python libraries for Python $V into airgap/vendor/py$TAG =="
+  rm -rf "$DEST"
+  # x86_64-manylinux_2_17 = runs on any Linux with glibc 2.17+, i.e. every CML runtime.
+  "$UV" pip install --quiet --link-mode copy --target "$DEST" --only-binary :all: \
+    --python-platform x86_64-manylinux_2_17 --python-version "$V" \
+    -r "$ROOT/requirements.txt"
+  rm -rf "$DEST/bin"            # console scripts point at this machine's Python
+  # Drop what is never loaded at runtime: C headers, test suites, notebook extras.
+  rm -rf "$DEST/share" "$DEST/pyarrow/include" "$DEST/pyarrow/tests" "$DEST/pyarrow/src" \
+         "$DEST/pandas/tests"
+  find "$DEST" -type d -name tests -path "*/numpy/*" -prune -exec rm -rf {} +
+  find "$DEST" \( -name "*.pxd" -o -name "*.pyx" -o -name "*.h" -o -name "*.hpp" -o -name "*.pyi" \) -delete
+done
 
-echo "== Downloading portable PostgreSQL $PG_VERSION (Linux x86_64) =="
-PG_URL="https://get.enterprisedb.com/postgresql/postgresql-${PG_VERSION}-linux-x64-binaries.tar.gz"
-curl -fL "$PG_URL" -o "$VENDOR/postgres/postgres.tar.gz" \
-  || { echo "Download failed — check $PG_URL is still current, see comment above PG_VERSION."; exit 1; }
-tar -xzf "$VENDOR/postgres/postgres.tar.gz" -C "$VENDOR/postgres" --strip-components=1
-rm "$VENDOR/postgres/postgres.tar.gz"
+# PostgreSQL: EDB no longer publishes Linux tarballs for any release after 10,
+# so we take the relocatable PostgreSQL 16 build that ships inside the
+# "pgserver" wheel on PyPI and unpack just the server out of it.
+echo "== Unpacking portable PostgreSQL 16 into airgap/vendor/postgres =="
+TMP="$(mktemp -d)"
+pip download --quiet --no-deps --platform manylinux2014_x86_64 --python-version 3.10 \
+  --implementation cp --abi cp310 --only-binary=:all: -d "$TMP" "pgserver==0.1.4"
+unzip -q "$TMP"/pgserver-*.whl -d "$TMP/x"
+rm -rf "$VENDOR/postgres"
+mv "$TMP/x/pgserver/pginstall" "$VENDOR/postgres"
+cp "$TMP"/x/pgserver.libs/* "$VENDOR/postgres/lib/"
+rm -rf "$TMP" "$VENDOR/postgres/include"
 
-echo "== Done. airgap/vendor/ is ready to carry into the airgap alongside the rest of this repo. =="
-du -sh "$VENDOR"
+echo "== Done. Carry airgap/vendor/ into CML alongside the rest of this repo. =="
+du -sh "$VENDOR"/*
