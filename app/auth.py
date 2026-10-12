@@ -19,7 +19,7 @@ import streamlit as st
 
 from . import db
 
-ADMIN_LAN_IDS = {"GMTRUN"}
+ADMIN_LAN_IDS = {"GMTRUN", "FCDTUN", "FCDAKG", "GMTBRL"}
 
 ACCESS_LEVELS = {"publish": 1, "archive": 2, "portfolio": 3}
 ACCESS_ORDER = ["publish", "archive", "portfolio"]

@@ -291,10 +291,26 @@ def _insert_children(cur, products: list[dict]) -> None:
             f"values ({', '.join(['%s'] * len(REALISATION_COLUMNS))})", realisation_rows)
 
 
+# Starting users. Loaded only while the users table is empty, i.e. the first
+# start on a new database, so later edits and deletions on the Create User page
+# are never undone. Manager is a LAN ID.
+SEED_USERS = [
+    ("GMTBRL", "IG", "Data", None, "portfolio"),
+    ("FCDAKG", "IG", "Data", "GMTBRL", "portfolio"),
+    ("FCDTUN", "IG", "Data", "GMTBRL", "portfolio"),
+    ("GMTRUN", "IG", "Data", "FCDTUN", "portfolio"),
+]
+
+
 @st.cache_resource
 def _schema_ready() -> bool:
     with psycopg.connect(st.secrets["DATABASE_URL"]) as conn:
         conn.execute(SCHEMA)
+        if conn.execute("select 1 from users limit 1").fetchone() is None:
+            with conn.cursor() as cur:
+                cur.executemany(
+                    f"insert into users ({', '.join(USER_COLUMNS)}) "
+                    f"values ({', '.join(['%s'] * len(USER_COLUMNS))})", SEED_USERS)
     return True
 
 
