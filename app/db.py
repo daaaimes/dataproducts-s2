@@ -440,6 +440,20 @@ def upsert_user(user: dict) -> None:
             f"on conflict (lan_id) do update set {assignments}", row)
 
 
+def upsert_users(users: list[dict]) -> int:
+    """Add or update many users in one transaction: either all of them are saved or none."""
+    rows = [(u["lanId"], u["department"], u["subDepartment"], u.get("manager") or None, u["access"])
+            for u in users]
+    assignments = ", ".join(f"{col} = excluded.{col}" for col in USER_COLUMNS if col != "lan_id")
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.executemany(
+                f"insert into users ({', '.join(USER_COLUMNS)}) "
+                f"values ({', '.join(['%s'] * len(USER_COLUMNS))}) "
+                f"on conflict (lan_id) do update set {assignments}", rows)
+    return len(rows)
+
+
 def delete_user(lan_id: str) -> None:
     with _connect() as conn:
         conn.execute("delete from users where lan_id = %s", (lan_id,))
