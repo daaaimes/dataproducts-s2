@@ -21,6 +21,39 @@ from app import auth, store, theme  # noqa: E402  (must follow set_page_config)
 from app.format import money  # noqa: E402
 from app.ui import brand, esc, write  # noqa: E402
 
+
+
+def _sign_in_page() -> None:
+    """Everything the app shows before sign-in. Nothing is read from the database."""
+    theme.inject("light")
+    st.markdown("<style>[data-testid='stSidebar'], [data-testid='stSidebarCollapsedControl']"
+                "{display:none}</style>", unsafe_allow_html=True)
+    _, mid, _ = st.columns([1, 1.4, 1])
+    with mid:
+        st.write("")
+        st.write("")
+        write(brand())
+        st.write("")
+        write('<h2 class="dpv-h3">Sign in to continue</h2>'
+              '<p class="dpv-sub">Use your LAN ID and the password you use to sign in to your '
+              "computer. Your access depends on your LAN ID.</p>")
+        with st.form("sign_in_form"):
+            username = st.text_input("LAN ID", key="signin_user", autocomplete="username")
+            password = st.text_input("Password", type="password", key="signin_pass",
+                                     autocomplete="current-password")
+            submitted = st.form_submit_button("Sign in", type="primary", use_container_width=True)
+        if submitted:
+            error = auth.sign_in(username, password)
+            if error:
+                st.error(error)
+            else:
+                st.rerun()
+
+
+if auth.signin_required() and not auth.current_lan_id():
+    _sign_in_page()
+    st.stop()
+
 store.init()
 theme.inject(store.theme())
 
@@ -89,7 +122,12 @@ with st.sidebar:
     if lan_id:
         write(f'<div style="font-size:11px;color:var(--text-muted)">Signed in as '
               f'<strong style="color:var(--text-primary)">{esc(lan_id)}</strong> · {esc(tier)}</div>')
-    if not auth.is_header_detected():
+        if auth.signin_required():
+            st.button("Sign out", key="sign_out", on_click=auth.sign_out, use_container_width=True)
+    if not lan_id and not auth.override_allowed():
+        write('<div style="font-size:11px;color:var(--text-muted)">Not signed in — we could not '
+              "identify you from your CML sign-in. Refresh the page, or contact an admin.</div>")
+    if auth.override_allowed() and not auth.is_header_detected():
         with st.expander("Dev: set LAN ID" if not lan_id else f"Dev override: {lan_id}"):
             st.caption("No identity header detected from CML yet — set one manually to test "
                        "as a listed user.")

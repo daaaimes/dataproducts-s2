@@ -4,10 +4,14 @@ Access tiers are hierarchical: Publish < Archive < Portfolio. A user's single
 `access` value is a ceiling, not an exact match — Archive also grants
 everything Publish can do, Portfolio also grants everything Archive can do.
 
-The LAN ID is meant to come from a header a fronting proxy/CML injects once
-that is confirmed to be in place (see `_HEADER_CANDIDATES`). Until then,
-`_detect_lan_id` finds nothing and the sidebar's manual override lets you
-test the app as any listed user locally.
+Who the user is comes from, in order of preference:
+  1. A sign-in page checked against the company LDAP / Active Directory server,
+     when DPV_LDAP_SERVER is set (see app/ldap_auth.py). The app then shows nothing
+     until the person has signed in with their LAN ID and password, and the
+     manual override and any proxy header are ignored.
+  2. A header a fronting proxy/CML injects (see `_HEADER_CANDIDATES`), when no
+     LDAP server is configured.
+  3. For a local run only, the sidebar's manual override (see `override_allowed`).
 
 "Create user" is a separate, hardcoded admin list — intentionally outside
 the users table and the three business tiers, per the spec this was built
@@ -15,9 +19,12 @@ against.
 """
 from __future__ import annotations
 
+import os
+import time
+
 import streamlit as st
 
-from . import db
+from . import db, ldap_auth
 
 ADMIN_LAN_IDS = {"GMTRUN", "FCDTUN", "FCDAKG", "GMTBRL"}
 
@@ -39,21 +46,88 @@ def _detect_lan_id() -> str | None:
     return None
 
 
+def signin_required() -> bool:
+    """True when the app asks for a LAN ID and password (an LDAP server is configured)."""
+    return ldap_auth.configured()
+
+
 def is_header_detected() -> bool:
     return bool(_detect_lan_id())
 
 
+def override_allowed() -> bool:
+    """Whether the manual "set LAN ID" box may be used.
+
+    It lets whoever types claim any identity, so it must never be reachable on a
+    deployed CML Application, where the identity has to come from CML's sign-in.
+    It is on for a local run (no CML environment), or when DPV_ALLOW_LAN_OVERRIDE=1
+    is set on the Application as a deliberate, admin-controlled break-glass switch.
+    """
+    if signin_required():
+        return False  # the password sign-in is the only way in; typing a name is never an identity
+    if os.environ.get("DPV_ALLOW_LAN_OVERRIDE") == "1":
+        return True
+    return not os.environ.get("CDSW_APP_PORT")
+
+
 def current_lan_id() -> str:
-    """The signed-in LAN ID for this session, or "" if none is known yet."""
+    """The signed-in LAN ID for this session, or "" if none is known.
+
+    A header from CML's sign-in always wins. Otherwise a manual override is only
+    honoured where override_allowed(), so a missing header can't be papered over
+    by typing a name on a deployed app."""
     ss = st.session_state
-    if "lan_id" not in ss:
-        ss.lan_id = _detect_lan_id() or ""
+    if signin_required():
+        ss.lan_id = ss.get("_signed_in_lan_id", "")
+        return ss.lan_id
+    detected = _detect_lan_id()
+    if detected:
+        ss.lan_id = detected
+    elif "lan_id" not in ss or not override_allowed():
+        ss.lan_id = ""
     return ss.lan_id
 
 
 def set_lan_id_override(lan_id: str) -> None:
+    if not override_allowed():
+        return
     st.session_state.lan_id = lan_id.strip().upper()
     st.session_state.pop("_user_cache", None)
+
+
+_MAX_FAILURES = 5
+_LOCKOUT_SECONDS = 60
+
+
+def sign_in(username: str, password: str) -> str:
+    """Try to sign this session in. Returns "" on success, else a message to show.
+
+    After a few wrong passwords in a row the session is locked out briefly. That
+    only slows a person down; the directory's own lockout policy is the real
+    protection against someone guessing a password."""
+    ss = st.session_state
+    now = time.time()
+    if ss.get("_signin_locked_until", 0) > now:
+        wait = int(ss["_signin_locked_until"] - now) + 1
+        return f"Too many attempts. Please wait {wait} seconds and try again."
+    lan_id, message = ldap_auth.authenticate(username, password)
+    if lan_id:
+        ss.pop("_signin_failures", None)
+        ss.pop("_signin_locked_until", None)
+        ss["_signed_in_lan_id"] = lan_id
+        ss.pop("_user_cache", None)
+        return ""
+    ss["_signin_failures"] = ss.get("_signin_failures", 0) + 1
+    if ss["_signin_failures"] >= _MAX_FAILURES:
+        ss["_signin_locked_until"] = now + _LOCKOUT_SECONDS
+        ss["_signin_failures"] = 0
+    return message
+
+
+def sign_out() -> None:
+    for key in ("_signed_in_lan_id", "lan_id", "_user_cache", "_signin_failures",
+                "_signin_locked_until"):
+        st.session_state.pop(key, None)
 
 
 def current_user() -> dict | None:
