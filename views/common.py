@@ -12,7 +12,15 @@ def goto(page: str, **params) -> None:
     """Navigate to another page, carrying deep-link state."""
     for k, v in params.items():
         st.session_state[k] = v
-    st.switch_page(st.session_state["_pages"][page])
+    pages = st.session_state["_pages"]
+    # A page this person's access doesn't include isn't registered; fall back to home.
+    st.switch_page(pages.get(page) or pages["dashboard"])
+
+
+def page_available(page: str) -> bool:
+    """Whether this page is switched on for the signed-in person, so a button that leads
+    to it can be hidden when it is not."""
+    return page in st.session_state.get("_pages", {})
 
 
 def open_product(pid: str) -> None:

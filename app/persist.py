@@ -54,11 +54,14 @@ def _int(v, lo, hi):
     return n if lo <= n <= hi else None
 
 
-def load_into(settings: dict) -> None:
-    """Apply any settings present in the query string. Invalid values are ignored."""
+def load_into(settings: dict, allowed: set[str] | None = None) -> None:
+    """Apply any settings present in the query string. Invalid values are ignored.
+
+    `allowed` limits which settings may be taken from the URL (None = all), so someone who
+    may not change settings cannot do it by editing the address."""
     params = st.query_params
     for param, (key, parse) in FIELDS.items():
-        if param not in params:
+        if param not in params or (allowed is not None and key not in allowed):
             continue
         value = parse(params[param])
         if value is not None:

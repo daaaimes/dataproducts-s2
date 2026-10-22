@@ -61,6 +61,7 @@ NAV = [
     ("dashboard", "Dashboard", "⌂", "views/pages/dashboard_page.py"),
     ("value", "Value a Product", "✦", "views/pages/value_page.py"),
     ("my_entries", "My Entries", "☷", "views/pages/my_entries_page.py"),
+    ("team_entries", "Team Entries", "☶", "views/pages/team_entries_page.py"),
     ("portfolio", "Portfolio", "▤", "views/pages/portfolio_page.py"),
     ("product", "Valuation", "◎", "views/pages/product_page.py"),
     ("compare", "Compare", "⇄", "views/pages/compare_page.py"),
@@ -75,8 +76,27 @@ NAV = [
 
 # st.Page only accepts real emoji as icons; the sidebar renders its own glyphs
 # in the link label instead, which keeps the original's typographic marks.
+# Pages switched off for everyone, for now. Their code is untouched: delete a name from this
+# set to bring the page (and every button that leads to it) back.
+HIDDEN_PAGES = {"advisor", "realisation", "assumptions"}
+
+
+def _available(key: str) -> bool:
+    """Which pages this person gets. Everyone has My Entries; Archive-tier users add Team
+    Entries (their direct reports' work) and Portfolio-tier users add Portfolio."""
+    if key in HIDDEN_PAGES:
+        return False
+    if key == "portfolio":
+        return auth.is_portfolio()
+    if key == "team_entries":
+        return auth.is_archive_tier()
+    return True
+
+
 pages = {}
 for key, title, _icon, path in NAV:
+    if not _available(key):
+        continue
     is_home = key == "dashboard"
     # The default page is served at "/" — giving it its own url_path would 404.
     pages[key] = (st.Page(path, title=title, default=True) if is_home
@@ -91,8 +111,8 @@ with st.sidebar:
     write(brand())
 
     for key, title, icon, _path in NAV:
-        if key == "product":
-            continue  # reached from the portfolio, not the nav
+        if key == "product" or key not in pages:
+            continue  # "product" is reached from a list, not the nav
         if key == "admin_users" and not auth.is_admin():
             continue
         if key == "boardroom":

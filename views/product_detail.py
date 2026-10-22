@@ -18,7 +18,7 @@ from app.format import (money, money_full, months, num, pct, ratio_pct, relative
 from app.theme import tokens
 from app.ui import (badge, band_tone, card, esc, evidence_tone, gauge, h3, key_value,
                     lifecycle_tone, meter, rule, stars, swatch, table, write)
-from .common import chart, goto
+from .common import chart, goto, page_available
 
 
 @st.dialog("How was this calculated?", width="large")
@@ -132,7 +132,7 @@ def render() -> None:
             goto("reports", report_product=p["id"])
         if b2.button("Boardroom", use_container_width=True):
             goto("boardroom", boardroom_product=p["id"])
-        if b3.button("Advisor", use_container_width=True):
+        if page_available("advisor") and b3.button("Advisor", use_container_width=True):
             goto("advisor", selected_product=p["id"])
 
     status = p.get("recordStatus", "published")
@@ -477,7 +477,7 @@ def render() -> None:
                       f'{"font-weight:600" if current else ""}">{stage}</span>'
                       f'{current_badge}</li>')
         write(f'<ol style="margin:10px 0 0;padding:0;list-style:none">{items}</ol>')
-        if p["realisation"]:
+        if p["realisation"] and page_available("realisation"):
             if st.button("View value realisation  →", key="pd_real", use_container_width=True):
                 goto("realisation", realisation_product=p["id"])
 
@@ -533,7 +533,7 @@ def render() -> None:
             if st.button("Delete product", type="primary", key="pd_delete"):
                 store.delete_product(p["id"])
                 st.session_state.pop("selected_product", None)
-                goto("portfolio")
+                goto("my_entries")
 
 
 def kpi_cell(meta, value, gross, currency, t) -> str:

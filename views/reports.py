@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 import streamlit as st
 
-from app import store
+from app import pdf_report, store
 from app.charts import value_waterfall
 from app.data.catalogs import CATEGORY_META
 from app.engine.models import MODELS
@@ -103,10 +103,14 @@ def render() -> None:
     weakest = sorted(v["confidence"]["dimensions"], key=lambda d: d["value"])[0]["label"].lower()
 
     with dl_col:
-        st.download_button("⤓  Download Markdown",
-                           build_markdown(p, v, priority, scenarios, settings, decision),
-                           f"{p['name'].replace(' ', '-').lower()}-business-case.md",
-                           "text/markdown", use_container_width=True)
+        # The PDF is typeset from the same text the Markdown download used to carry.
+        st.download_button("⤓  Download PDF",
+                           pdf_report.markdown_to_pdf(
+                               build_markdown(p, v, priority, scenarios, settings, decision),
+                               title=f"{p['name']} — Executive Business Case",
+                               footer=f"{settings['organisationName']} · {p['name']} · Executive Business Case"),
+                           f"{p['name'].replace(' ', '-').lower()}-business-case.pdf",
+                           "application/pdf", use_container_width=True)
 
     st.write("")
     write(f"""<div class="dpv-paper">

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from app import store
+from app import auth, store
 from app.charts import portfolio_matrix, QUADRANTS, LIFECYCLE_SLOT
 from app.data.catalogs import CATEGORY_META
 from app.engine.insights import portfolio_insights
@@ -69,7 +69,7 @@ def render() -> None:
             from .common import goto
             goto("value")
     with hero_b:
-        if st.button("View Portfolio  →", use_container_width=True):
+        if auth.is_portfolio() and st.button("View Portfolio  →", use_container_width=True):
             from .common import goto
             goto("portfolio")
     with hero_c:

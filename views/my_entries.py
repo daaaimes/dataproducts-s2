@@ -41,7 +41,9 @@ def render() -> None:
         for r in entries:
             _entry_row(r, c)
 
-    queue = store.archive_queue()
+    # Archive-tier users find their team's entries on the Team Entries page; a Portfolio
+    # user has no such page, so the queue stays here for them.
+    queue = store.archive_queue() if auth.is_portfolio() else []
     if queue:
         write(rule() + '<h3 class="dpv-h3" style="margin-top:8px">Awaiting archive — your team</h3>'
               '<p class="dpv-sub">Published entries from people who report to you. Archive one '

@@ -158,6 +158,12 @@ def is_portfolio() -> bool:
     return has_level(current_user(), "portfolio")
 
 
+def is_archive_tier() -> bool:
+    """Archive access exactly (a Portfolio user has their own, wider, set of pages)."""
+    user = current_user()
+    return bool(user) and user.get("access") == "archive"
+
+
 def can_submit() -> bool:
     """Any listed user, of any tier, can create/publish their own drafts."""
     return current_user() is not None
@@ -179,6 +185,18 @@ def can_view(product: dict) -> bool:
     if not owner:
         return True
     return is_portfolio() or owner == current_lan_id()
+
+
+def can_open(product: dict) -> bool:
+    """Whether the signed-in user may open this entry's page and act on it.
+
+    Wider than `can_view`, which decides what feeds the totals: a manager with Archive
+    access can also open their direct reports' non-Draft entries, so they can archive them.
+    Drafts stay private to the owner."""
+    if can_view(product):
+        return True
+    owner = product.get("ownerLanId") or ""
+    return bool(owner) and product.get("recordStatus") != "draft" and can_archive_entry(owner)
 
 
 def is_manager_of_anyone() -> bool:

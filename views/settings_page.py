@@ -16,19 +16,25 @@ from .common import page_header
 def render() -> None:
     s = store.settings()
     rows = store.rows()
+    can_edit = store.can_change_settings()
 
     page_header("Settings",
                 "Organisation-wide financial parameters and prioritisation weights. Changes apply "
                 "immediately across every valuation.")
+    if not can_edit:
+        st.info("Only users with Portfolio access can change settings, so they are read-only for "
+                "you. You can still switch between light and dark mode.")
 
     # ── Organisation ────────────────────────────────────────────────────────
     write(h3("Organisation"))
     a, b = st.columns(2)
-    org = a.text_input("Organisation name", s["organisationName"], key="set_org")
+    org = a.text_input("Organisation name", s["organisationName"], key="set_org",
+                       disabled=not can_edit)
     codes = list(CURRENCIES)
     cur = b.selectbox("Reporting currency", codes, codes.index(s["currency"]), key="set_cur",
                       format_func=lambda k: f"{k} — {CURRENCIES[k]['label']}",
-                      help="Applied to every value shown across the application.")
+                      help="Applied to every value shown across the application.",
+                      disabled=not can_edit)
     dark = st.toggle("Dark interface", value=s["theme"] == "dark", key="set_theme",
                      help="Boardroom Mode always presents on the same surface as the rest of the app.")
     patch = {}
@@ -49,13 +55,13 @@ def render() -> None:
     f1, f2 = st.columns(2)
     with f1:
         rate = st.slider("Discount rate", 0.0, 0.25, float(s["discountRate"]), 0.005,
-                         key="set_rate", format="%.3f")
+                         key="set_rate", format="%.3f", disabled=not can_edit)
         write('<p style="margin:-6px 0 0;font-size:11.5px;line-height:1.7;color:var(--text-muted)">'
               "Used for NPV. A rate materially below the organisation's cost of capital will "
               "flatter every case in the portfolio.</p>")
     with f2:
         horizon = st.slider("Projection period (years)", 3, 10, int(s["horizonYears"]), 1,
-                            key="set_horizon")
+                            key="set_horizon", disabled=not can_edit)
         write('<p style="margin:-6px 0 0;font-size:11.5px;line-height:1.7;color:var(--text-muted)">'
               "ROI, NPV and IRR are calculated over this horizon. Three-year and five-year "
               "economic value are always reported.</p>")
@@ -63,11 +69,12 @@ def render() -> None:
     hours = g1.number_input("Annual working hours per FTE", 1000, 2400,
                             int(s["annualWorkingHours"]), 20, key="set_hours",
                             help="Used to convert a fully-loaded annual salary into an hourly rate, "
-                                 "and hours released into FTE equivalents.")
+                                 "and hours released into FTE equivalents.",
+                            disabled=not can_edit)
     guardrails = g2.toggle(
         "Assumption guardrails", value=s["guardrailsEnabled"], key="set_guard",
         help="Automatic benchmark checks that flag assumptions outside observed ranges. Turning "
-             "these off removes the anti-gaming controls.")
+             "these off removes the anti-gaming controls.", disabled=not can_edit)
 
     patch = {}
     if rate != s["discountRate"]:
@@ -99,7 +106,7 @@ def render() -> None:
     for i, w in enumerate(WEIGHT_META):
         with cols[i % 2]:
             weights[w["key"]] = st.slider(w["label"], 0, 50, int(weights[w["key"]]), 1,
-                                          key=f"set_w_{w['key']}")
+                                          key=f"set_w_{w['key']}", disabled=not can_edit)
             write(f'<p style="margin:-6px 0 6px;font-size:11px;line-height:1.6;'
                   f'color:var(--text-muted)">{esc(w["help"])}</p>')
     if weights != s["priorityWeights"]:
@@ -110,7 +117,8 @@ def render() -> None:
     r1.markdown('<p style="padding-top:8px;font-size:12px;color:var(--text-muted)">'
                 "Bands: 90–100 Invest Now · 75–89 Accelerate · 60–74 Validate · below 60 Reassess</p>",
                 unsafe_allow_html=True)
-    if r2.button("↺  Reset weights", use_container_width=True, key="set_reset_w"):
+    if r2.button("↺  Reset weights", use_container_width=True, key="set_reset_w",
+                 disabled=not can_edit):
         store.set_settings({"priorityWeights": copy.deepcopy(DEFAULT_SETTINGS["priorityWeights"])})
         st.rerun()
 
@@ -123,7 +131,7 @@ def render() -> None:
           "to enterprise identity, Finance systems, Jira, the data catalogue and the data product "
           "registry.</p>")
     st.write("")
-    if st.button("↺  Restore banking catalogue", key="set_reset_demo"):
+    if st.button("↺  Restore banking catalogue", key="set_reset_demo", disabled=not can_edit):
         store.reset_demo()
         st.toast("Banking catalogue restored")
         st.rerun()

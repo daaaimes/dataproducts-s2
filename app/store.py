@@ -29,7 +29,7 @@ def init() -> None:
     if "settings" not in ss:
         ss.settings = copy.deepcopy(DEFAULT_SETTINGS)
         # A refresh starts a new Streamlit session; recover what the user chose.
-        persist.load_into(ss.settings)
+        persist.load_into(ss.settings, None if auth.is_portfolio() else {"theme"})
     if "products" not in ss:
         if db.product_count() == 0:
             db.replace_products(build_catalog_products(ss.settings))
@@ -52,7 +52,16 @@ def theme() -> str:
     return st.session_state.settings.get("theme", "light")
 
 
+def can_change_settings() -> bool:
+    """Only Portfolio-level users may change settings. Anyone may switch light/dark."""
+    return auth.is_portfolio()
+
+
 def set_settings(patch: dict) -> None:
+    if not can_change_settings():
+        patch = {k: v for k, v in patch.items() if k == "theme"}
+        if not patch:
+            return
     st.session_state.settings.update(patch)
     st.session_state.dirty += 1
     persist.save(st.session_state.settings)
@@ -83,6 +92,8 @@ def set_compare(ids) -> None:
 
 
 def reset_demo() -> None:
+    if not can_change_settings():
+        return
     products = build_catalog_products(st.session_state.settings)
     db.replace_products(products)
     st.session_state.products = products
@@ -127,7 +138,7 @@ def rows():
 
 def row_by_id(pid: str):
     r = next((r for r in _all_rows() if r["product"]["id"] == pid), None)
-    if r is None or not auth.can_view(r["product"]):
+    if r is None or not auth.can_open(r["product"]):
         return None
     return r
 
@@ -139,6 +150,27 @@ def my_entries():
         return []
     return sorted(
         (r for r in _all_rows() if r["product"].get("ownerLanId") == lan_id),
+        key=lambda r: r["product"]["updatedAt"], reverse=True)
+
+
+def direct_reports() -> list[str]:
+    """LAN IDs of the people whose manager is the signed-in user."""
+    me = auth.current_lan_id()
+    if not me:
+        return []
+    return sorted(u["lanId"] for u in db.fetch_users() if u.get("manager") == me)
+
+
+def team_entries():
+    """Published and Archived entries of the signed-in user's direct reports, newest
+    first. Drafts are private to their owner and never listed."""
+    if not auth.has_level(auth.current_user(), "archive"):
+        return []
+    reports = set(direct_reports())
+    return sorted(
+        (r for r in _all_rows()
+         if r["product"].get("ownerLanId") in reports
+         and r["product"].get("recordStatus") in ("published", "archived")),
         key=lambda r: r["product"]["updatedAt"], reverse=True)
 
 
